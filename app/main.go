@@ -125,5 +125,5 @@ func readFile(args string) {
 		return
 	}
 
-	fmt.Print(fileContent)
+	fmt.Print(string(fileContent))
 }
