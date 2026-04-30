@@ -90,34 +90,10 @@ func main() {
 			os.Exit(0)
 		}
 
-		currAssistantMsg := openai.ChatCompletionMessageParamUnion{
-			OfAssistant: &openai.ChatCompletionAssistantMessageParam{
-				Content: openai.ChatCompletionAssistantMessageParamContentUnion{
-					OfString: openai.String(resp.Choices[0].Message.Content),
-				},
-			},
-		}
-
-		hasToolCalls := len(resp.Choices[0].Message.ToolCalls) > 0
-		if hasToolCalls {
-			currAssistantMsg.OfAssistant.ToolCalls = []openai.ChatCompletionMessageToolCallUnionParam{
-				{
-					OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
-						ID: resp.Choices[0].Message.ToolCalls[0].ID,
-						Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
-							Name:      resp.Choices[0].Message.ToolCalls[0].Function.Name,
-							Arguments: resp.Choices[0].Message.ToolCalls[0].Function.Arguments,
-						},
-					},
-				},
-			}
-		}
-
-		messages = append(messages, currAssistantMsg)
+		messages = append(messages, buildAssistantMsg(resp))
 
 		// You can use print statements as follows for debugging, they'll be visible when running tests.
 		fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
-		fmt.Fprintln(os.Stderr, messages)
 
 		for _, toolCall := range resp.Choices[0].Message.ToolCalls {
 			content, err := executeTool(toolCall)
@@ -126,8 +102,45 @@ func main() {
 				return
 			}
 
-			messages = append(messages, buildMessage(toolCall.ID, content))
+			messages = append(messages, buildToolMessage(toolCall.ID, content))
 		}
+	}
+}
+
+func buildAssistantMsg(resp *openai.ChatCompletion) openai.ChatCompletionMessageParamUnion {
+	assistantMsg := openai.ChatCompletionMessageParamUnion{
+		OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+			Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+				OfString: openai.String(resp.Choices[0].Message.Content),
+			},
+		},
+	}
+
+	hasToolCalls := len(resp.Choices[0].Message.ToolCalls) > 0
+	if hasToolCalls {
+		assistantMsg.OfAssistant.ToolCalls = []openai.ChatCompletionMessageToolCallUnionParam{
+			{
+				OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+					ID: resp.Choices[0].Message.ToolCalls[0].ID,
+					Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+						Name:      resp.Choices[0].Message.ToolCalls[0].Function.Name,
+						Arguments: resp.Choices[0].Message.ToolCalls[0].Function.Arguments,
+					},
+				},
+			},
+		}
+	}
+	return assistantMsg
+}
+
+func buildToolMessage(toolCallID, content string) openai.ChatCompletionMessageParamUnion {
+	return openai.ChatCompletionMessageParamUnion{
+		OfTool: &openai.ChatCompletionToolMessageParam{
+			ToolCallID: toolCallID,
+			Content: openai.ChatCompletionToolMessageParamContentUnion{
+				OfString: openai.String(content),
+			},
+		},
 	}
 }
 
@@ -149,17 +162,6 @@ func executeTool(toolCall openai.ChatCompletionMessageToolCallUnion) (string, er
 	}
 
 	return "", fmt.Errorf("unknown function: %s", funcName)
-}
-
-func buildMessage(toolCallID, content string) openai.ChatCompletionMessageParamUnion {
-	return openai.ChatCompletionMessageParamUnion{
-		OfTool: &openai.ChatCompletionToolMessageParam{
-			ToolCallID: toolCallID,
-			Content: openai.ChatCompletionToolMessageParamContentUnion{
-				OfString: openai.String(content),
-			},
-		},
-	}
 }
 
 func readFile(args string) (string, error) {
