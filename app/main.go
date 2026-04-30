@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -15,8 +16,10 @@ import (
 const (
 	ReadFunctionName  = "Read"
 	WriteFunctionName = "Write"
+	BashFunctionName  = "Bash"
 	FilePathParam     = "file_path"
 	ContentParam      = "content"
+	CommandParam      = "command"
 	StopReason        = "stop"
 	RoleTool          = "tool"
 )
@@ -63,6 +66,25 @@ var (
 			},
 		},
 	}
+
+	bashTool = openai.ChatCompletionToolUnionParam{
+		OfFunction: &openai.ChatCompletionFunctionToolParam{
+			Function: shared.FunctionDefinitionParam{
+				Name:        "Bash",
+				Description: openai.String("Execute a shell command"),
+				Parameters: openai.FunctionParameters{
+					"type":     "object",
+					"required": []string{"command"},
+					"properties": map[string]any{
+						"command": map[string]string{
+							"type":        "string",
+							"description": "The command to execute",
+						},
+					},
+				},
+			},
+		},
+	}
 )
 
 func main() {
@@ -101,7 +123,7 @@ func main() {
 			openai.ChatCompletionNewParams{
 				Model:    "anthropic/claude-haiku-4.5",
 				Messages: messages,
-				Tools:    []openai.ChatCompletionToolUnionParam{readTool, writeTool},
+				Tools:    []openai.ChatCompletionToolUnionParam{readTool, writeTool, bashTool},
 			},
 		)
 		if err != nil {
@@ -193,9 +215,34 @@ func executeTool(toolCall openai.ChatCompletionMessageToolCallUnion) (string, er
 			return "", err
 		}
 		return content, nil
+	case BashFunctionName:
+		content, err := executeBashCommand(toolCall.Function.Arguments)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error executing bash command: %v\n", err)
+			return "", err
+		}
+		return content, nil
 	}
 
 	return "", fmt.Errorf("unknown function: %s", funcName)
+}
+
+func executeBashCommand(s string) (string, error) {
+	var jsonFields map[string]any
+	if err := json.Unmarshal([]byte(s), &jsonFields); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing arguments: %v\n", err)
+		return "", err
+	}
+
+	command, ok := jsonFields[CommandParam]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Missing required argument: %s\n", CommandParam)
+		return "", fmt.Errorf("missing required argument: %s", CommandParam)
+	}
+
+	output, _ := exec.Command(command.(string)).CombinedOutput()
+
+	return string(output), nil
 }
 
 func writeFile(args string) (string, error) {
