@@ -240,7 +240,8 @@ func executeBashCommand(s string) (string, error) {
 		return "", fmt.Errorf("missing required argument: %s", CommandParam)
 	}
 
-	output, _ := exec.Command(command.(string)).CombinedOutput()
+	output, err := exec.Command(command.(string)).CombinedOutput()
+	fmt.Fprintln(os.Stderr, "Command output:", string(output), "Error:", err)
 
 	return string(output), nil
 }
