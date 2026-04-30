@@ -15,6 +15,8 @@ import (
 const (
 	ReadFunctionName = "Read"
 	FilePathParam    = "file_path"
+	StopReason       = "stop"
+	RoleTool         = "tool"
 )
 
 func main() {
@@ -37,93 +39,136 @@ func main() {
 	}
 
 	client := openai.NewClient(option.WithAPIKey(apiKey), option.WithBaseURL(baseUrl))
-	resp, err := client.Chat.Completions.New(context.Background(),
-		openai.ChatCompletionNewParams{
-			Model: "anthropic/claude-haiku-4.5",
-			Messages: []openai.ChatCompletionMessageParamUnion{
-				{
-					OfUser: &openai.ChatCompletionUserMessageParam{
-						Content: openai.ChatCompletionUserMessageParamContentUnion{
-							OfString: openai.String(prompt),
-						},
-					},
+
+	messages := []openai.ChatCompletionMessageParamUnion{
+		{
+			OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String(prompt),
 				},
 			},
-			Tools: []openai.ChatCompletionToolUnionParam{
-				{
-					OfFunction: &openai.ChatCompletionFunctionToolParam{
-						Function: shared.FunctionDefinitionParam{
-							Name:        "Read",
-							Description: openai.String("Read and return the contents of a file"),
-							Parameters: openai.FunctionParameters{
-								"type": "object",
-								"properties": map[string]any{
-									"file_path": map[string]string{
-										"type":        "string",
-										"description": "The path to the file to read",
+		},
+	}
+
+	for {
+		resp, err := client.Chat.Completions.New(context.Background(),
+			openai.ChatCompletionNewParams{
+				Model:    "anthropic/claude-haiku-4.5",
+				Messages: messages,
+				Tools: []openai.ChatCompletionToolUnionParam{
+					{
+						OfFunction: &openai.ChatCompletionFunctionToolParam{
+							Function: shared.FunctionDefinitionParam{
+								Name:        "Read",
+								Description: openai.String("Read and return the contents of a file"),
+								Parameters: openai.FunctionParameters{
+									"type": "object",
+									"properties": map[string]any{
+										"file_path": map[string]string{
+											"type":        "string",
+											"description": "The path to the file to read",
+										},
 									},
+									"required": []string{"file_path"},
 								},
-								"required": []string{"file_path"},
 							},
 						},
 					},
 				},
 			},
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		if len(resp.Choices) == 0 {
+			panic("No choices in response")
+		}
+
+		if resp.Choices[0].FinishReason == StopReason {
+			fmt.Print(resp.Choices[0].Message.Content)
+			os.Exit(0)
+		}
+
+		messages = append(messages, openai.ChatCompletionMessageParamUnion{
+			OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+				Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+					OfString: openai.String(resp.Choices[0].Message.Content),
+				},
+			},
+		})
+
+		// You can use print statements as follows for debugging, they'll be visible when running tests.
+		fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
+
+		hasToolCalls := len(resp.Choices[0].Message.ToolCalls) > 0
+		if !hasToolCalls {
+			fmt.Print(resp.Choices[0].Message.Content)
+			return
+		}
+
+		for _, toolCall := range resp.Choices[0].Message.ToolCalls {
+			content, err := executeTool(toolCall)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error executing tool: %v\n", err)
+				return
+			}
+
+			messages = append(messages, buildMessage(toolCall.ID, content))
+		}
+	}
+}
+
+func executeTool(toolCall openai.ChatCompletionMessageToolCallUnion) (string, error) {
+	funcName := toolCall.Function.Name
+
+	if !toolCall.Function.JSON.Arguments.Valid() {
+		return "", fmt.Errorf("invalid arguments for function %s", funcName)
+	}
+
+	switch funcName {
+	case ReadFunctionName:
+		content, err := readFile(toolCall.Function.Arguments)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
+			return "", err
+		}
+		return content, nil
+	}
+
+	return "", fmt.Errorf("unknown function: %s", funcName)
+}
+
+func buildMessage(toolCallID, content string) openai.ChatCompletionMessageParamUnion {
+	return openai.ChatCompletionMessageParamUnion{
+		OfTool: &openai.ChatCompletionToolMessageParam{
+			Role:       RoleTool,
+			ToolCallID: toolCallID,
+			Content: openai.ChatCompletionToolMessageParamContentUnion{
+				OfString: openai.String(content),
+			},
 		},
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
 	}
-	if len(resp.Choices) == 0 {
-		panic("No choices in response")
-	}
-
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
-
-	hasToolCalls := len(resp.Choices[0].Message.ToolCalls) > 0
-	if hasToolCalls {
-		toolCall := resp.Choices[0].Message.ToolCalls[0]
-		funcName := toolCall.Function.Name
-
-		if !hasValidateArgs(toolCall.Function.Arguments) {
-			fmt.Fprintf(os.Stderr, "Arguments for function %s are not valid\n", funcName)
-		}
-
-		switch funcName {
-		case ReadFunctionName:
-			readFile(toolCall.Function.Arguments)
-		}
-
-		return
-	}
-
-	fmt.Print(resp.Choices[0].Message.Content)
 }
 
-func hasValidateArgs(args string) bool {
-	return json.Valid([]byte(args))
-}
-
-func readFile(args string) {
+func readFile(args string) (string, error) {
 	var jsonFields map[string]any
 	if err := json.Unmarshal([]byte(args), &jsonFields); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing arguments: %v\n", err)
-		return
+		return "", err
 	}
 
 	filePath, ok := jsonFields[FilePathParam]
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Missing required argument: %s\n", FilePathParam)
-		return
+		return "", fmt.Errorf("missing required argument: %s", FilePathParam)
 	}
 
 	fileContent, err := os.ReadFile(filePath.(string))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
-		return
+		return "", err
 	}
 
-	fmt.Print(string(fileContent))
+	return string(fileContent), nil
 }
