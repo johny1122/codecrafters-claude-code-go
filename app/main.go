@@ -13,10 +13,56 @@ import (
 )
 
 const (
-	ReadFunctionName = "Read"
-	FilePathParam    = "file_path"
-	StopReason       = "stop"
-	RoleTool         = "tool"
+	ReadFunctionName  = "Read"
+	WriteFunctionName = "Write"
+	FilePathParam     = "file_path"
+	ContentParam      = "content"
+	StopReason        = "stop"
+	RoleTool          = "tool"
+)
+
+var (
+	readTool = openai.ChatCompletionToolUnionParam{
+		OfFunction: &openai.ChatCompletionFunctionToolParam{
+			Function: shared.FunctionDefinitionParam{
+				Name:        "Read",
+				Description: openai.String("Read and return the contents of a file"),
+				Parameters: openai.FunctionParameters{
+					"type": "object",
+					"properties": map[string]any{
+						"file_path": map[string]string{
+							"type":        "string",
+							"description": "The path to the file to read",
+						},
+					},
+					"required": []string{"file_path"},
+				},
+			},
+		},
+	}
+
+	writeTool = openai.ChatCompletionToolUnionParam{
+		OfFunction: &openai.ChatCompletionFunctionToolParam{
+			Function: shared.FunctionDefinitionParam{
+				Name:        "Write",
+				Description: openai.String("Write content to a file"),
+				Parameters: openai.FunctionParameters{
+					"type":     "object",
+					"required": []string{"file_path", "content"},
+					"properties": map[string]any{
+						"file_path": map[string]string{
+							"type":        "string",
+							"description": "The path to the file to write to",
+						},
+						"content": map[string]string{
+							"type":        "string",
+							"description": "The content to write to the file",
+						},
+					},
+				},
+			},
+		},
+	}
 )
 
 func main() {
@@ -55,26 +101,7 @@ func main() {
 			openai.ChatCompletionNewParams{
 				Model:    "anthropic/claude-haiku-4.5",
 				Messages: messages,
-				Tools: []openai.ChatCompletionToolUnionParam{
-					{
-						OfFunction: &openai.ChatCompletionFunctionToolParam{
-							Function: shared.FunctionDefinitionParam{
-								Name:        "Read",
-								Description: openai.String("Read and return the contents of a file"),
-								Parameters: openai.FunctionParameters{
-									"type": "object",
-									"properties": map[string]any{
-										"file_path": map[string]string{
-											"type":        "string",
-											"description": "The path to the file to read",
-										},
-									},
-									"required": []string{"file_path"},
-								},
-							},
-						},
-					},
-				},
+				Tools:    []openai.ChatCompletionToolUnionParam{readTool, writeTool},
 			},
 		)
 		if err != nil {
@@ -159,9 +186,43 @@ func executeTool(toolCall openai.ChatCompletionMessageToolCallUnion) (string, er
 			return "", err
 		}
 		return content, nil
+	case WriteFunctionName:
+		content, err := writeFile(toolCall.Function.Arguments)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
+			return "", err
+		}
+		return content, nil
 	}
 
 	return "", fmt.Errorf("unknown function: %s", funcName)
+}
+
+func writeFile(args string) (string, error) {
+	var jsonFields map[string]any
+	if err := json.Unmarshal([]byte(args), &jsonFields); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing arguments: %v\n", err)
+		return "", err
+	}
+
+	filePath, ok := jsonFields[FilePathParam]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Missing required argument: %s\n", FilePathParam)
+		return "", fmt.Errorf("missing required argument: %s", FilePathParam)
+	}
+
+	content, ok := jsonFields[ContentParam]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Missing required argument: %s\n", ContentParam)
+		return "", fmt.Errorf("missing required argument: %s", ContentParam)
+	}
+
+	err := os.WriteFile(filePath.(string), []byte(content.(string)), 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
+		return "", err
+	}
+	return "wrote content to file successfully", nil
 }
 
 func readFile(args string) (string, error) {
