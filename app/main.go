@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -9,6 +10,11 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/shared"
+)
+
+const (
+	ReadFunctionName = "Read"
+	FilePathParam    = "file_path"
 )
 
 func main() {
@@ -76,6 +82,48 @@ func main() {
 	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
 
-	// TODO: Uncomment the line below to pass the first stage
+	hasToolCalls := len(resp.Choices[0].Message.ToolCalls) > 0
+	if hasToolCalls {
+		toolCall := resp.Choices[0].Message.ToolCalls[0]
+		funcName := toolCall.Function.Name
+
+		if !hasValidateArgs(toolCall.Function.Arguments) {
+			fmt.Fprintf(os.Stderr, "Arguments for function %s are not valid\n", funcName)
+		}
+
+		switch funcName {
+		case ReadFunctionName:
+			readFile(toolCall.Function.Arguments)
+		}
+
+		return
+	}
+
 	fmt.Print(resp.Choices[0].Message.Content)
+}
+
+func hasValidateArgs(args string) bool {
+	return json.Valid([]byte(args))
+}
+
+func readFile(args string) {
+	var jsonFields map[string]any
+	if err := json.Unmarshal([]byte(args), &jsonFields); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing arguments: %v\n", err)
+		return
+	}
+
+	filePath, ok := jsonFields[FilePathParam]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Missing required argument: %s\n", FilePathParam)
+		return
+	}
+
+	fileContent, err := os.ReadFile(filePath.(string))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
+		return
+	}
+
+	fmt.Print(fileContent)
 }
