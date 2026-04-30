@@ -90,23 +90,34 @@ func main() {
 			os.Exit(0)
 		}
 
-		messages = append(messages, openai.ChatCompletionMessageParamUnion{
+		currAssistantMsg := openai.ChatCompletionMessageParamUnion{
 			OfAssistant: &openai.ChatCompletionAssistantMessageParam{
 				Content: openai.ChatCompletionAssistantMessageParamContentUnion{
 					OfString: openai.String(resp.Choices[0].Message.Content),
 				},
 			},
-		})
+		}
+
+		hasToolCalls := len(resp.Choices[0].Message.ToolCalls) > 0
+		if hasToolCalls {
+			currAssistantMsg.OfAssistant.ToolCalls = []openai.ChatCompletionMessageToolCallUnionParam{
+				{
+					OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+						ID: resp.Choices[0].Message.ToolCalls[0].ID,
+						Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+							Name:      resp.Choices[0].Message.ToolCalls[0].Function.Name,
+							Arguments: resp.Choices[0].Message.ToolCalls[0].Function.Arguments,
+						},
+					},
+				},
+			}
+		}
+
+		messages = append(messages, currAssistantMsg)
 
 		// You can use print statements as follows for debugging, they'll be visible when running tests.
 		fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
 		fmt.Fprintln(os.Stderr, messages)
-
-		hasToolCalls := len(resp.Choices[0].Message.ToolCalls) > 0
-		if !hasToolCalls {
-			fmt.Print(resp.Choices[0].Message.Content)
-			return
-		}
 
 		for _, toolCall := range resp.Choices[0].Message.ToolCalls {
 			content, err := executeTool(toolCall)
@@ -143,7 +154,6 @@ func executeTool(toolCall openai.ChatCompletionMessageToolCallUnion) (string, er
 func buildMessage(toolCallID, content string) openai.ChatCompletionMessageParamUnion {
 	return openai.ChatCompletionMessageParamUnion{
 		OfTool: &openai.ChatCompletionToolMessageParam{
-			Role:       RoleTool,
 			ToolCallID: toolCallID,
 			Content: openai.ChatCompletionToolMessageParamContentUnion{
 				OfString: openai.String(content),
