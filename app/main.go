@@ -240,7 +240,16 @@ func executeBashCommand(s string) (string, error) {
 		return "", fmt.Errorf("missing required argument: %s", CommandParam)
 	}
 
-	output, err := exec.Command(command.(string)).CombinedOutput()
+	workingDir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+		return "", err
+	}
+
+	cmd := exec.Command(command.(string))
+	cmd.Path = workingDir
+
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error executing bash command: %v\n", err)
 		return err.Error(), nil
