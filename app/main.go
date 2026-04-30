@@ -241,8 +241,10 @@ func executeBashCommand(s string) (string, error) {
 	}
 
 	output, err := exec.Command(command.(string)).CombinedOutput()
-	fmt.Fprintln(os.Stderr, "Command output:", string(output), "Error:", err)
-
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error executing bash command: %v\n", err)
+		return err.Error(), nil
+	}
 	return string(output), nil
 }
 
