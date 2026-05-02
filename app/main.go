@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -227,9 +228,9 @@ func executeTool(toolCall openai.ChatCompletionMessageToolCallUnion) (string, er
 	return "", fmt.Errorf("unknown function: %s", funcName)
 }
 
-func executeBashCommand(s string) (string, error) {
+func executeBashCommand(args string) (string, error) {
 	var jsonFields map[string]any
-	if err := json.Unmarshal([]byte(s), &jsonFields); err != nil {
+	if err := json.Unmarshal([]byte(args), &jsonFields); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing arguments: %v\n", err)
 		return "", err
 	}
@@ -240,13 +241,24 @@ func executeBashCommand(s string) (string, error) {
 		return "", fmt.Errorf("missing required argument: %s", CommandParam)
 	}
 
+	commandStr := command.(string)
+	commandParts := strings.Split(commandStr, " ")
+	fmt.Fprintln(os.Stderr, "Executing command:", commandStr)
+
+	if len(commandParts) == 0 {
+		return "", fmt.Errorf("given command is empty")
+	}
+
+	cmd := exec.Command(commandParts[0])
+	if len(commandParts) > 1 {
+		cmd = exec.Command(commandParts[0], commandParts[1:]...)
+	}
+
 	workingDir, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
 		return "", err
 	}
-
-	cmd := exec.Command(command.(string))
 	cmd.Path = workingDir
 
 	output, err := cmd.CombinedOutput()
