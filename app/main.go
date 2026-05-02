@@ -262,6 +262,7 @@ func executeBashCommand(args string) (string, error) {
 	cmd.Path = workingDir
 
 	output, err := cmd.CombinedOutput()
+	fmt.Fprintln(os.Stderr, "Command output:", string(output))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error executing bash command: %v\n", err)
 		return err.Error(), nil
