@@ -254,12 +254,12 @@ func executeBashCommand(args string) (string, error) {
 		cmd = exec.Command(commandParts[0], commandParts[1:]...)
 	}
 
-	workingDir, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
-		return "", err
-	}
-	cmd.Path = workingDir
+	// workingDir, err := os. Getwd()
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
+	// 	return "", err
+	// }
+	// cmd.Path = workingDir
 
 	output, err := cmd.CombinedOutput()
 	fmt.Fprintln(os.Stderr, "Command output:", string(output))
