@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -242,25 +241,19 @@ func executeBashCommand(args string) (string, error) {
 	}
 
 	commandStr := command.(string)
-	commandParts := strings.Split(commandStr, " ")
-	fmt.Fprintln(os.Stderr, "Executing command:", commandStr)
+	// commandParts := strings.Split(commandStr, " ")
+	// fmt.Fprintln(os.Stderr, "Executing command:", commandStr)
 
-	if len(commandParts) == 0 {
-		return "", fmt.Errorf("given command is empty")
-	}
-
-	cmd := exec.Command(commandParts[0])
-	if len(commandParts) > 1 {
-		cmd = exec.Command(commandParts[0], commandParts[1:]...)
-	}
-
-	// workingDir, err := os. Getwd()
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
-	// 	return "", err
+	// if len(commandParts) == 0 {
+	// 	return "", fmt.Errorf("given command is empty")
 	// }
-	// cmd.Path = workingDir
 
+	// cmd := exec.Command(commandParts[0])
+	// if len(commandParts) > 1 {
+	// 	cmd = exec.Command(commandParts[0], commandParts[1:]...)
+	// }
+
+	cmd := exec.Command(commandStr)
 	output, err := cmd.CombinedOutput()
 	fmt.Fprintln(os.Stderr, "Command output:", string(output))
 	if err != nil {
