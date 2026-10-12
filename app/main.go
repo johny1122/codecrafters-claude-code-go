@@ -127,7 +127,7 @@ func main() {
 		})
 	}
 
-	hasSlashCommand := strings.Contains(prompt, " /")
+	hasSlashCommand := strings.Contains(prompt, " /") || strings.HasPrefix(prompt, "/")
 	if hasSlashCommand {
 		slashIndex := strings.Index(prompt, "/")
 		skillName := ""
