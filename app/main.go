@@ -23,6 +23,7 @@ const (
 	CommandParam      = "command"
 	StopReason        = "stop"
 	RoleTool          = "tool"
+	SkillsFolderPath  = "skills/"
 )
 
 var (
@@ -109,7 +110,20 @@ func main() {
 
 	client := openai.NewClient(option.WithAPIKey(apiKey), option.WithBaseURL(baseUrl))
 
+	skillsMetadata, err := getSkillsMetadata()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting skills metadata: %v\n", err)
+		os.Exit(1)
+	}
+
 	messages := []openai.ChatCompletionMessageParamUnion{
+		{
+			OfSystem: &openai.ChatCompletionSystemMessageParam{
+				Content: openai.ChatCompletionSystemMessageParamContentUnion{
+					OfString: openai.String("You have access to the following skills: \n" + skillsMetadata),
+				},
+			},
+		},
 		{
 			OfUser: &openai.ChatCompletionUserMessageParam{
 				Content: openai.ChatCompletionUserMessageParamContentUnion{
@@ -155,6 +169,50 @@ func main() {
 			messages = append(messages, buildToolMessage(toolCall.ID, content))
 		}
 	}
+}
+
+func getSkillsMetadata() (string, error) {
+	files, err := os.ReadDir(SkillsFolderPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading skills folder: %v\n", err)
+		return "", err
+	}
+
+	var skills []string
+	for _, file := range files {
+		if file.IsDir() {
+			skillFilePath := fmt.Sprintf("%s%s/SKILL.md", SkillsFolderPath, file.Name())
+			content, err := os.ReadFile(skillFilePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading skill file %s: %v\n", skillFilePath, err)
+				continue
+			}
+
+			lines := strings.Split(string(content), "\n")
+			frontmatterFound := 0
+			name, description := "", ""
+			inDescription := false
+			for _, line := range lines {
+				if strings.TrimSpace(line) == "---" {
+					frontmatterFound++
+					if frontmatterFound == 2 {
+						break
+					}
+				} else if inDescription {
+					description += " " + line
+					continue
+				} else if strings.HasPrefix(line, "name: ") {
+					name = strings.TrimSpace(line[5:])
+				} else if strings.HasPrefix(line, "description: ") {
+					description = strings.TrimSpace(line[13:])
+					inDescription = true
+				}
+			}
+			skills = append(skills, fmt.Sprintf("%s: %s\n", name, description))
+		}
+	}
+
+	return strings.Join(skills, "\n"), nil
 }
 
 func buildAssistantMsg(resp *openai.ChatCompletion) openai.ChatCompletionMessageParamUnion {
