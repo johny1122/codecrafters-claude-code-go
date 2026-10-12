@@ -127,6 +127,22 @@ func main() {
 		})
 	}
 
+	hasSlashCommand := strings.Contains(prompt, "/")
+	if hasSlashCommand {
+		slashIndex := strings.Index(prompt, "/")
+		skillName := ""
+		spaceIndex := strings.Index(prompt[slashIndex:], " ")
+		if spaceIndex != -1 {
+			skillName = prompt[slashIndex+1 : slashIndex+spaceIndex]
+		} else {
+			skillName = prompt[slashIndex+1:]
+		}
+
+		skillBody := getSkillBody(skillName)
+		prompt = strings.Replace(prompt, "/"+skillName, skillBody, 1)
+
+	}
+
 	messages = append(messages, openai.ChatCompletionMessageParamUnion{
 		OfUser: &openai.ChatCompletionUserMessageParam{
 			Content: openai.ChatCompletionUserMessageParamContentUnion{
@@ -171,6 +187,31 @@ func main() {
 			messages = append(messages, buildToolMessage(toolCall.ID, content))
 		}
 	}
+}
+
+func getSkillBody(skillName string) string {
+	skillFilePath := fmt.Sprintf("%s/%s/SKILL.md", SkillsFolderPath, skillName)
+	content, err := os.ReadFile(skillFilePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading skill file %s: %v\n", skillFilePath, err)
+		return ""
+	}
+
+	lines := strings.Split(string(content), "\n")
+	frontmatterFound := 0
+	skillBody := ""
+	for _, line := range lines {
+		if frontmatterFound == 2 {
+			skillBody += line + "\n"
+			continue
+		}
+
+		if strings.TrimSpace(line) == "---" {
+			frontmatterFound++
+		}
+	}
+
+	return skillBody
 }
 
 func getSkillsMetadata() (string, error) {
