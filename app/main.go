@@ -129,23 +129,7 @@ func main() {
 
 	hasSlashCommand := strings.Contains(prompt, " /") || strings.HasPrefix(prompt, "/")
 	if hasSlashCommand {
-		slashIndex := strings.Index(prompt, "/")
-		skillName := ""
-		spaceIndex := strings.Index(prompt[slashIndex:], " ")
-		if spaceIndex != -1 {
-			skillName = prompt[slashIndex+1 : slashIndex+spaceIndex]
-		} else {
-			skillName = prompt[slashIndex+1:]
-		}
-
-		skillBody := getSkillBody(skillName)
-		arguments := getArgumentsFromPrompt(prompt, skillName, slashIndex)
-		prompt = strings.Replace(prompt, "/"+skillName, skillBody, 1)
-		fmt.Fprintf(os.Stderr, "Arguments: %v\n", arguments)
-		prompt = strings.Replace(prompt, "$ARGUMENTS", strings.Join(arguments, " "), 1)
-		for i, arg := range arguments {
-			prompt = strings.Replace(prompt, fmt.Sprintf("$%d", i), arg, 1)
-		}
+		prompt = getPromptWithSlashCommand(prompt)
 	}
 
 	messages = append(messages, openai.ChatCompletionMessageParamUnion{
@@ -192,6 +176,27 @@ func main() {
 			messages = append(messages, buildToolMessage(toolCall.ID, content))
 		}
 	}
+}
+
+func getPromptWithSlashCommand(prompt string) string {
+	slashIndex := strings.Index(prompt, "/")
+	skillName := ""
+	spaceIndex := strings.Index(prompt[slashIndex:], " ")
+	if spaceIndex != -1 {
+		skillName = prompt[slashIndex+1 : slashIndex+spaceIndex]
+	} else {
+		skillName = prompt[slashIndex+1:]
+	}
+
+	skillBody := getSkillBody(skillName)
+	arguments := getArgumentsFromPrompt(prompt, skillName, slashIndex)
+	prompt = strings.Replace(prompt, "/"+skillName, skillBody, 1)
+	prompt = strings.Replace(prompt, "$ARGUMENTS", strings.Join(arguments, " "), 1)
+	for i, arg := range arguments {
+		prompt = strings.Replace(prompt, fmt.Sprintf("$%d", i), arg, 1)
+	}
+
+	return prompt
 }
 
 func getArgumentsFromPrompt(prompt, skillName string, slashIndex int) []string {
