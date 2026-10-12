@@ -181,7 +181,7 @@ func getSkillsMetadata() (string, error) {
 	var skills []string
 	for _, file := range files {
 		if file.IsDir() {
-			skillFilePath := fmt.Sprintf("%s%s/SKILL.md", SkillsFolderPath, file.Name())
+			skillFilePath := fmt.Sprintf("%s/%s/SKILL.md", SkillsFolderPath, file.Name())
 			content, err := os.ReadFile(skillFilePath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error reading skill file %s: %v\n", skillFilePath, err)
