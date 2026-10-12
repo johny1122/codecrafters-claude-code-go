@@ -140,7 +140,8 @@ func main() {
 
 		skillBody := getSkillBody(skillName)
 		prompt = strings.Replace(prompt, "/"+skillName, skillBody, 1)
-		arguments := getArgumentsFromPrompt(prompt, skillName)
+		arguments := getArgumentsFromPrompt(prompt, skillName, slashIndex)
+		fmt.Fprintf(os.Stderr, "Arguments: %v\n", arguments)
 		prompt = strings.Replace(prompt, "$ARGUMENTS", strings.Join(arguments, " "), 1)
 		for i, arg := range arguments {
 			prompt = strings.Replace(prompt, fmt.Sprintf("$%d", i), arg, 1)
@@ -193,12 +194,7 @@ func main() {
 	}
 }
 
-func getArgumentsFromPrompt(prompt, skillName string) []string {
-	slashIndex := strings.Index(prompt, "/"+skillName)
-	if slashIndex == -1 {
-		return nil
-	}
-
+func getArgumentsFromPrompt(prompt, skillName string, slashIndex int) []string {
 	return strings.Fields(prompt[slashIndex+1+len(skillName):])
 }
 
