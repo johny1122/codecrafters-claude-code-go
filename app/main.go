@@ -140,7 +140,11 @@ func main() {
 
 		skillBody := getSkillBody(skillName)
 		prompt = strings.Replace(prompt, "/"+skillName, skillBody, 1)
-
+		arguments := getArgumentsFromPrompt(prompt, skillName)
+		prompt = strings.Replace(prompt, "$ARGUMENTS", strings.Join(arguments, " "), 1)
+		for i, arg := range arguments {
+			prompt = strings.Replace(prompt, fmt.Sprintf("$%d", i), arg, 1)
+		}
 	}
 
 	messages = append(messages, openai.ChatCompletionMessageParamUnion{
@@ -187,6 +191,15 @@ func main() {
 			messages = append(messages, buildToolMessage(toolCall.ID, content))
 		}
 	}
+}
+
+func getArgumentsFromPrompt(prompt, skillName string) []string {
+	slashIndex := strings.Index(prompt, "/"+skillName)
+	if slashIndex == -1 {
+		return nil
+	}
+
+	return strings.Fields(prompt[slashIndex+1+len(skillName):])
 }
 
 func getSkillBody(skillName string) string {
