@@ -116,22 +116,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	messages := []openai.ChatCompletionMessageParamUnion{
-		{
+	messages := []openai.ChatCompletionMessageParamUnion{}
+	if skillsMetadata != "" {
+		messages = append(messages, openai.ChatCompletionMessageParamUnion{
 			OfSystem: &openai.ChatCompletionSystemMessageParam{
 				Content: openai.ChatCompletionSystemMessageParamContentUnion{
 					OfString: openai.String("You have access to the following skills: \n" + skillsMetadata),
 				},
 			},
-		},
-		{
-			OfUser: &openai.ChatCompletionUserMessageParam{
-				Content: openai.ChatCompletionUserMessageParamContentUnion{
-					OfString: openai.String(prompt),
-				},
+		})
+	}
+
+	messages = append(messages, openai.ChatCompletionMessageParamUnion{
+		OfUser: &openai.ChatCompletionUserMessageParam{
+			Content: openai.ChatCompletionUserMessageParamContentUnion{
+				OfString: openai.String(prompt),
 			},
 		},
-	}
+	})
 
 	for {
 		resp, err := client.Chat.Completions.New(context.Background(),
@@ -175,7 +177,7 @@ func getSkillsMetadata() (string, error) {
 	files, err := os.ReadDir(SkillsFolderPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading skills folder: %v\n", err)
-		return "", err
+		return "", nil
 	}
 
 	var skills []string
