@@ -226,7 +226,6 @@ func getSkillBody(skillName string) string {
 func getSkillsMetadata() (string, error) {
 	files, err := os.ReadDir(SkillsFolderPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading skills folder: %v\n", err)
 		return "", nil
 	}
 
