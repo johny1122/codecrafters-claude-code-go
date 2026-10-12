@@ -23,7 +23,7 @@ const (
 	CommandParam      = "command"
 	StopReason        = "stop"
 	RoleTool          = "tool"
-	SkillsFolderPath  = ".claude/skills/"
+	SkillsFolderPath  = ".claude/skills"
 )
 
 var (
