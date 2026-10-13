@@ -142,7 +142,7 @@ func main() {
 		}
 
 		for _, skillName := range foundSkills {
-			message := replaceArgumentsInPrompt(skillName, skillName, strings.Fields(prompt[indexOfFisrtArgument:]))
+			message := replaceArgumentsInPrompt(skillName, skillName[1:], strings.Fields(prompt[indexOfFisrtArgument:]))
 			fmt.Printf("message: %s\n", message)
 			messages = append(messages, openai.ChatCompletionMessageParamUnion{
 				OfUser: &openai.ChatCompletionUserMessageParam{
