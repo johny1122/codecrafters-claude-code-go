@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/openai/openai-go/v3"
@@ -110,7 +111,7 @@ func main() {
 
 	client := openai.NewClient(option.WithAPIKey(apiKey), option.WithBaseURL(baseUrl))
 
-	skillsMetadata, err := getSkillsMetadata()
+	skillsMetadata, skillNames, err := getSkillsMetadata()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting skills metadata: %v\n", err)
 		os.Exit(1)
@@ -127,18 +128,44 @@ func main() {
 		})
 	}
 
-	hasSlashCommand := strings.Contains(prompt, " /") || strings.HasPrefix(prompt, "/")
-	if hasSlashCommand {
-		prompt = getPromptWithSlashCommand(prompt)
-	}
+	if strings.Index(prompt, "/") == 0 { // stack skills
+		promptParts := strings.Fields(prompt)
+		foundSkills := []string{}
+		indexOfFisrtArgument := -1
+		for _, skillName := range promptParts {
+			if slices.Contains(skillNames, skillName[1:]) { // remove the leading slash
+				foundSkills = append(foundSkills, skillName)
+			} else {
+				indexOfFisrtArgument = strings.Index(prompt, skillName)
+				break
+			}
+		}
 
-	messages = append(messages, openai.ChatCompletionMessageParamUnion{
-		OfUser: &openai.ChatCompletionUserMessageParam{
-			Content: openai.ChatCompletionUserMessageParamContentUnion{
-				OfString: openai.String(prompt),
+		for _, skillName := range foundSkills {
+			message := replaceArgumentsInPrompt(skillName, skillName, strings.Fields(prompt[indexOfFisrtArgument:]))
+			messages = append(messages, openai.ChatCompletionMessageParamUnion{
+				OfUser: &openai.ChatCompletionUserMessageParam{
+					Content: openai.ChatCompletionUserMessageParamContentUnion{
+						OfString: openai.String(message),
+					},
+				},
+			})
+		}
+
+	} else {
+		hasSlashCommand := strings.Contains(prompt, " /") || strings.HasPrefix(prompt, "/")
+		if hasSlashCommand {
+			prompt = getPromptWithSlashCommand(prompt)
+		}
+
+		messages = append(messages, openai.ChatCompletionMessageParamUnion{
+			OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String(prompt),
+				},
 			},
-		},
-	})
+		})
+	}
 
 	for {
 		resp, err := client.Chat.Completions.New(context.Background(),
@@ -188,9 +215,14 @@ func getPromptWithSlashCommand(prompt string) string {
 		skillName = prompt[slashIndex+1:]
 	}
 
-	skillBody := getSkillBody(skillName)
 	arguments := getArgumentsFromPrompt(prompt, skillName, slashIndex)
-	prompt = strings.Replace(prompt, "/"+skillName, skillBody, 1)
+	prompt = replaceArgumentsInPrompt(prompt, skillName, arguments)
+
+	return prompt
+}
+
+func replaceArgumentsInPrompt(prompt, skillName string, arguments []string) string {
+	prompt = strings.Replace(prompt, "/"+skillName, getSkillBody(skillName), 1)
 	prompt = strings.Replace(prompt, "$ARGUMENTS", strings.Join(arguments, " "), 1)
 	for i, arg := range arguments {
 		prompt = strings.Replace(prompt, fmt.Sprintf("$%d", i), arg, 1)
@@ -228,13 +260,14 @@ func getSkillBody(skillName string) string {
 	return skillBody
 }
 
-func getSkillsMetadata() (string, error) {
+func getSkillsMetadata() (string, []string, error) {
 	files, err := os.ReadDir(SkillsFolderPath)
 	if err != nil {
-		return "", nil
+		return "", nil, nil
 	}
 
 	var skills []string
+	var skillNames []string
 	for _, file := range files {
 		if file.IsDir() {
 			skillFilePath := fmt.Sprintf("%s/%s/SKILL.md", SkillsFolderPath, file.Name())
@@ -264,11 +297,12 @@ func getSkillsMetadata() (string, error) {
 					inDescription = true
 				}
 			}
+			skillNames = append(skillNames, name)
 			skills = append(skills, fmt.Sprintf("%s: %s\n", name, description))
 		}
 	}
 
-	return strings.Join(skills, "\n"), nil
+	return strings.Join(skills, "\n"), skillNames, nil
 }
 
 func buildAssistantMsg(resp *openai.ChatCompletion) openai.ChatCompletionMessageParamUnion {
