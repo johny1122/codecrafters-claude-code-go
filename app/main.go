@@ -131,7 +131,7 @@ func main() {
 	if strings.Index(prompt, "/") == 0 { // stack skills
 		promptParts := strings.Fields(prompt)
 		foundSkills := []string{}
-		indexOfFisrtArgument := -1
+		indexOfFisrtArgument := len(prompt)
 		for _, skillName := range promptParts {
 			if slices.Contains(skillNames, skillName[1:]) { // remove the leading slash
 				foundSkills = append(foundSkills, skillName)
