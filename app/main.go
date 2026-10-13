@@ -167,6 +167,7 @@ func main() {
 		})
 	}
 
+	fmt.Printf("messages: %v\n", messages)
 	for {
 		resp, err := client.Chat.Completions.New(context.Background(),
 			openai.ChatCompletionNewParams{
