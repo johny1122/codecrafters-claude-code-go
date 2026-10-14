@@ -420,7 +420,6 @@ func executeTool(toolCall openai.ChatCompletionMessageToolCallUnion) (string, er
 			fmt.Fprintf(os.Stderr, "Error executing bash command: %v\n", err)
 			return "", err
 		}
-		fmt.Fprintf(os.Stderr, "content: %v\n", content)
 		return content, nil
 	}
 
@@ -449,7 +448,6 @@ func executeSkillTool(args string) (string, error) {
 	argsStr := strings.Fields(skillArgs.(string))
 
 	skillBody := replaceArgumentsInPrompt("/"+skillNameStr, skillNameStr, argsStr)
-	fmt.Fprintf(os.Stderr, "skillName: %v\n skillArgs: %v\n skillBody: %v\n", skillNameStr, argsStr, skillBody)
 	return skillBody, nil
 }
 
