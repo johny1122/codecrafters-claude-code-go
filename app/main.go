@@ -448,7 +448,9 @@ func executeSkillTool(args string) (string, error) {
 	skillNameStr := SkillName.(string)
 	argsStr := strings.Fields(skillArgs.(string))
 
-	return replaceArgumentsInPrompt("\\"+skillNameStr, skillNameStr, argsStr), nil
+	skillBody := replaceArgumentsInPrompt("\\"+skillNameStr, skillNameStr, argsStr)
+	fmt.Fprintf(os.Stderr, "skillName: %v\n skillArgs: %v\n skillBody: %v\n", skillNameStr, argsStr, skillBody)
+	return skillBody, nil
 }
 
 func executeBashCommand(args string) (string, error) {
