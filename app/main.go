@@ -16,15 +16,16 @@ import (
 )
 
 const (
-	ReadFunctionName  = "Read"
-	WriteFunctionName = "Write"
-	BashFunctionName  = "Bash"
-	FilePathParam     = "file_path"
-	ContentParam      = "content"
-	CommandParam      = "command"
-	StopReason        = "stop"
-	RoleTool          = "tool"
-	SkillsFolderPath  = ".claude/skills"
+	ReadFunctionName            = "Read"
+	WriteFunctionName           = "Write"
+	BashFunctionName            = "Bash"
+	FilePathParam               = "file_path"
+	ContentParam                = "content"
+	CommandParam                = "command"
+	StopReason                  = "stop"
+	RoleTool                    = "tool"
+	SkillsFolderPath            = ".claude/skills"
+	ScriptLocationFormatMessage = "Skill: %s (located at .claude/skills/%s)\nPaths in the instructions below are relative to that folder.\n"
 )
 
 var (
@@ -143,6 +144,7 @@ func main() {
 
 		for _, skillName := range foundSkills {
 			message := replaceArgumentsInPrompt(skillName, skillName[1:], strings.Fields(prompt[indexOfFisrtArgument:]))
+			message = addScriptsLocationToPrompt(message, skillName)
 			messages = append(messages, openai.ChatCompletionMessageParamUnion{
 				OfUser: &openai.ChatCompletionUserMessageParam{
 					Content: openai.ChatCompletionUserMessageParamContentUnion{
@@ -217,8 +219,22 @@ func getPromptWithSlashCommand(prompt string) string {
 
 	arguments := getArgumentsFromPrompt(prompt, skillName, slashIndex)
 	prompt = replaceArgumentsInPrompt(prompt, skillName, arguments)
+	prompt = addScriptsLocationToPrompt(prompt, skillName)
 
 	return prompt
+}
+
+func addScriptsLocationToPrompt(prompt, skillName string) string {
+	_, err := os.ReadDir(SkillsFolderPath + "/" + skillName + "/scripts")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading skills directory: %v\n", err)
+		return prompt
+	}
+
+	prompt = fmt.Sprintf(ScriptLocationFormatMessage, skillName, skillName) + prompt
+
+	return prompt
+
 }
 
 func replaceArgumentsInPrompt(prompt, skillName string, arguments []string) string {
