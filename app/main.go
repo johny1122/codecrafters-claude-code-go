@@ -223,7 +223,6 @@ func runAgentLoop(client *openai.Client, messages []openai.ChatCompletionMessage
 		if resp.Choices[0].FinishReason == StopReason {
 			fmt.Print(resp.Choices[0].Message.Content)
 			if runAsSubAgent {
-				fmt.Fprintf(os.Stderr, "Sub-agent finished with message: %s\n", resp.Choices[0].Message.Content)
 				return resp.Choices[0].Message.Content
 			}
 			os.Exit(0)
@@ -344,7 +343,6 @@ func getSkillsMetadata() (string, []string, map[string]string, error) {
 						break
 					}
 				} else if strings.HasPrefix(line, "context: ") {
-					fmt.Fprintf(os.Stderr, "Found context for skill %s: %s\n", name, line[9:])
 					skillsContext[name] = strings.TrimSpace(line[9:])
 				} else if inDescription {
 					description += " " + line
@@ -361,7 +359,6 @@ func getSkillsMetadata() (string, []string, map[string]string, error) {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "skillsContext: %v\n", skillsContext)
 	return strings.Join(skills, "\n"), skillNames, skillsContext, nil
 }
 
@@ -467,7 +464,6 @@ func executeSkillTool(args string) (string, error) {
 	skillBody := replaceArgumentsInPrompt("/"+skillNameStr, skillNameStr, argsStr)
 
 	if shouldRunSubAgent(skillNameStr) {
-		fmt.Fprintf(os.Stderr, "Running skill %s in a separate context\n", skillNameStr)
 		resp := runAgentLoop(&client, []openai.ChatCompletionMessageParamUnion{
 			{
 				OfUser: &openai.ChatCompletionUserMessageParam{
@@ -485,7 +481,6 @@ func executeSkillTool(args string) (string, error) {
 }
 
 func shouldRunSubAgent(skillName string) bool {
-	fmt.Fprintf(os.Stderr, "skillsContext: %v\n", skillsContext)
 	if skillContext, ok := skillsContext[skillName]; ok {
 		return skillContext == "fork"
 	}
