@@ -225,6 +225,7 @@ func runAgentLoop(client *openai.Client, messages []openai.ChatCompletionMessage
 				fmt.Print(resp.Choices[0].Message.Content)
 				os.Exit(0)
 			} else {
+				fmt.Fprintf(os.Stderr, "Sub-agent finished with message: %s\n", resp.Choices[0].Message.Content)
 				return resp.Choices[0].Message.Content
 			}
 		}
@@ -466,6 +467,7 @@ func executeSkillTool(args string) (string, error) {
 	skillBody := replaceArgumentsInPrompt("/"+skillNameStr, skillNameStr, argsStr)
 
 	if shouldRunSubAgent(skillBody) {
+		fmt.Fprintf(os.Stderr, "Running skill %s in a separate context\n", skillNameStr)
 		resp := runAgentLoop(&client, []openai.ChatCompletionMessageParamUnion{
 			{
 				OfUser: &openai.ChatCompletionUserMessageParam{
