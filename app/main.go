@@ -221,13 +221,12 @@ func runAgentLoop(client *openai.Client, messages []openai.ChatCompletionMessage
 		}
 
 		if resp.Choices[0].FinishReason == StopReason {
-			if !runAsSubAgent {
-				fmt.Print(resp.Choices[0].Message.Content)
-				os.Exit(0)
-			} else {
+			fmt.Print(resp.Choices[0].Message.Content)
+			if runAsSubAgent {
 				fmt.Fprintf(os.Stderr, "Sub-agent finished with message: %s\n", resp.Choices[0].Message.Content)
 				return resp.Choices[0].Message.Content
 			}
+			os.Exit(0)
 		}
 
 		messages = append(messages, buildAssistantMsg(resp))
