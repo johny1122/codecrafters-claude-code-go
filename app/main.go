@@ -323,7 +323,6 @@ func getSkillsMetadata() (string, []string, map[string]string, error) {
 
 	var skills []string
 	var skillNames []string
-	// skillsContext := make(map[string]string)
 
 	for _, file := range files {
 		if file.IsDir() {
@@ -353,6 +352,7 @@ func getSkillsMetadata() (string, []string, map[string]string, error) {
 					description = strings.TrimSpace(line[13:])
 					inDescription = true
 				} else if strings.HasPrefix(line, "context:") {
+					fmt.Fprintf(os.Stderr, "Found context for skill %s: %s\n", name, line[8:])
 					skillsContext[name] = strings.TrimSpace(line[8:])
 				}
 			}
@@ -361,6 +361,7 @@ func getSkillsMetadata() (string, []string, map[string]string, error) {
 		}
 	}
 
+	fmt.Fprintf(os.Stderr, "skillsContext: %v\n", skillsContext)
 	return strings.Join(skills, "\n"), skillNames, skillsContext, nil
 }
 
