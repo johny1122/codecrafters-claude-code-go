@@ -19,13 +19,17 @@ const (
 	ReadFunctionName            = "Read"
 	WriteFunctionName           = "Write"
 	BashFunctionName            = "Bash"
+	SkillFunctionName           = "Skill"
 	FilePathParam               = "file_path"
 	ContentParam                = "content"
 	CommandParam                = "command"
 	StopReason                  = "stop"
 	RoleTool                    = "tool"
+	SkillNameParam              = "skill_name"
+	ArgsParam                   = "args"
 	SkillsFolderPath            = ".claude/skills"
 	ScriptLocationFormatMessage = "Skill: %s (located at .claude/skills/%s)\nPaths in the instructions below are relative to that folder.\n"
+	PromptSkillTool             = "If a skill matches the user's request, call the Skill tool with its name and follow the instructions it returns.\n"
 )
 
 var (
@@ -89,6 +93,29 @@ var (
 			},
 		},
 	}
+
+	skillTool = openai.ChatCompletionToolUnionParam{
+		OfFunction: &openai.ChatCompletionFunctionToolParam{
+			Function: shared.FunctionDefinitionParam{
+				Name:        "Skill",
+				Description: openai.String("Load a skill's instructions into the conversation"),
+				Parameters: openai.FunctionParameters{
+					"type":     "object",
+					"required": []string{"skill_name"},
+					"properties": map[string]any{
+						"skill_name": map[string]string{
+							"type":        "string",
+							"description": "The name of the skill to use",
+						},
+						"args": map[string]string{
+							"type":        "string",
+							"description": "Optional arguments for the skill",
+						},
+					},
+				},
+			},
+		},
+	}
 )
 
 func main() {
@@ -123,7 +150,7 @@ func main() {
 		messages = append(messages, openai.ChatCompletionMessageParamUnion{
 			OfSystem: &openai.ChatCompletionSystemMessageParam{
 				Content: openai.ChatCompletionSystemMessageParamContentUnion{
-					OfString: openai.String("You have access to the following skills: \n" + skillsMetadata),
+					OfString: openai.String("You have access to the following skills: \n" + skillsMetadata + PromptSkillTool),
 				},
 			},
 		})
@@ -174,7 +201,7 @@ func main() {
 			openai.ChatCompletionNewParams{
 				Model:    "anthropic/claude-haiku-4.5",
 				Messages: messages,
-				Tools:    []openai.ChatCompletionToolUnionParam{readTool, writeTool, bashTool},
+				Tools:    []openai.ChatCompletionToolUnionParam{readTool, writeTool, bashTool, skillTool},
 			},
 		)
 		if err != nil {
@@ -387,9 +414,41 @@ func executeTool(toolCall openai.ChatCompletionMessageToolCallUnion) (string, er
 			return "", err
 		}
 		return content, nil
+	case SkillFunctionName:
+		content, err := executeSkillTool(toolCall.Function.Arguments)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error executing bash command: %v\n", err)
+			return "", err
+		}
+		return content, nil
 	}
 
 	return "", fmt.Errorf("unknown function: %s", funcName)
+}
+
+func executeSkillTool(args string) (string, error) {
+	var jsonFields map[string]any
+	if err := json.Unmarshal([]byte(args), &jsonFields); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing arguments: %v\n", err)
+		return "", err
+	}
+
+	SkillName, ok := jsonFields[SkillNameParam]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Missing required argument: %s\n", SkillNameParam)
+		return "", fmt.Errorf("missing required argument: %s", SkillNameParam)
+	}
+
+	skillArgs, ok := jsonFields[ArgsParam]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Missing required argument: %s\n", ArgsParam)
+		return "", fmt.Errorf("missing required argument: %s", ArgsParam)
+	}
+
+	skillNameStr := SkillName.(string)
+	argsStr := strings.Fields(skillArgs.(string))
+
+	return replaceArgumentsInPrompt("\\"+skillNameStr, skillNameStr, argsStr), nil
 }
 
 func executeBashCommand(args string) (string, error) {
