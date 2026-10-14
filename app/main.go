@@ -420,6 +420,7 @@ func executeTool(toolCall openai.ChatCompletionMessageToolCallUnion) (string, er
 			fmt.Fprintf(os.Stderr, "Error executing bash command: %v\n", err)
 			return "", err
 		}
+		fmt.Fprintf(os.Stderr, "content: %v\n", content)
 		return content, nil
 	}
 
