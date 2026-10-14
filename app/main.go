@@ -465,7 +465,7 @@ func executeSkillTool(args string) (string, error) {
 
 	skillBody := replaceArgumentsInPrompt("/"+skillNameStr, skillNameStr, argsStr)
 
-	if shouldRunSubAgent(skillBody) {
+	if shouldRunSubAgent(skillNameStr) {
 		fmt.Fprintf(os.Stderr, "Running skill %s in a separate context\n", skillNameStr)
 		resp := runAgentLoop(&client, []openai.ChatCompletionMessageParamUnion{
 			{
@@ -483,8 +483,9 @@ func executeSkillTool(args string) (string, error) {
 	return skillBody, nil
 }
 
-func shouldRunSubAgent(skillBody string) bool {
-	if skillContext, ok := skillsContext[skillBody]; ok {
+func shouldRunSubAgent(skillName string) bool {
+	fmt.Fprintf(os.Stderr, "skillsContext: %v\n", skillsContext)
+	if skillContext, ok := skillsContext[skillName]; ok {
 		return skillContext == "fork"
 	}
 
