@@ -439,7 +439,10 @@ func executeSkillTool(args string) (string, error) {
 		return "", fmt.Errorf("missing required argument: %s", SkillNameParam)
 	}
 
-	skillArgs, _ := jsonFields[ArgsParam]
+	skillArgs, ok := jsonFields[ArgsParam]
+	if !ok {
+		skillArgs = ""
+	}
 
 	skillNameStr := SkillName.(string)
 	argsStr := strings.Fields(skillArgs.(string))
