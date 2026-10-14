@@ -351,9 +351,9 @@ func getSkillsMetadata() (string, []string, map[string]string, error) {
 				} else if strings.HasPrefix(line, "description: ") {
 					description = strings.TrimSpace(line[13:])
 					inDescription = true
-				} else if strings.HasPrefix(line, "context:") {
-					fmt.Fprintf(os.Stderr, "Found context for skill %s: %s\n", name, line[8:])
-					skillsContext[name] = strings.TrimSpace(line[8:])
+				} else if strings.HasPrefix(line, "context: ") {
+					fmt.Fprintf(os.Stderr, "Found context for skill %s: %s\n", name, line[9:])
+					skillsContext[name] = strings.TrimSpace(line[9:])
 				}
 			}
 			skillNames = append(skillNames, name)
