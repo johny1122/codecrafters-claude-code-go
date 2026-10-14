@@ -30,6 +30,7 @@ const (
 	SkillsFolderPath            = ".claude/skills"
 	ScriptLocationFormatMessage = "Skill: %s (located at .claude/skills/%s)\nPaths in the instructions below are relative to that folder.\n"
 	PromptSkillTool             = "If a skill matches the user's request, call the Skill tool with its name and follow the instructions it returns.\n"
+	SubAgentReturnMessage       = "Skill %s ran in a separate context and returned: %s"
 )
 
 var (
@@ -118,6 +119,9 @@ var (
 	}
 )
 
+var skillsContext = make(map[string]string)
+var client openai.Client
+
 func main() {
 	var prompt string
 	flag.StringVar(&prompt, "p", "", "Prompt to send to LLM")
@@ -137,9 +141,9 @@ func main() {
 		panic("Env variable OPENROUTER_API_KEY not found")
 	}
 
-	client := openai.NewClient(option.WithAPIKey(apiKey), option.WithBaseURL(baseUrl))
+	client = openai.NewClient(option.WithAPIKey(apiKey), option.WithBaseURL(baseUrl))
 
-	skillsMetadata, skillNames, err := getSkillsMetadata()
+	skillsMetadata, skillNames, _, err := getSkillsMetadata()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting skills metadata: %v\n", err)
 		os.Exit(1)
@@ -196,6 +200,10 @@ func main() {
 		})
 	}
 
+	_ = runAgentLoop(&client, messages, false)
+}
+
+func runAgentLoop(client *openai.Client, messages []openai.ChatCompletionMessageParamUnion, runAsSubAgent bool) string {
 	for {
 		resp, err := client.Chat.Completions.New(context.Background(),
 			openai.ChatCompletionNewParams{
@@ -213,8 +221,12 @@ func main() {
 		}
 
 		if resp.Choices[0].FinishReason == StopReason {
-			fmt.Print(resp.Choices[0].Message.Content)
-			os.Exit(0)
+			if !runAsSubAgent {
+				fmt.Print(resp.Choices[0].Message.Content)
+				os.Exit(0)
+			} else {
+				return resp.Choices[0].Message.Content
+			}
 		}
 
 		messages = append(messages, buildAssistantMsg(resp))
@@ -226,7 +238,7 @@ func main() {
 			content, err := executeTool(toolCall)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error executing tool: %v\n", err)
-				return
+				return ""
 			}
 
 			messages = append(messages, buildToolMessage(toolCall.ID, content))
@@ -303,14 +315,16 @@ func getSkillBody(skillName string) string {
 	return skillBody
 }
 
-func getSkillsMetadata() (string, []string, error) {
+func getSkillsMetadata() (string, []string, map[string]string, error) {
 	files, err := os.ReadDir(SkillsFolderPath)
 	if err != nil {
-		return "", nil, nil
+		return "", nil, nil, nil
 	}
 
 	var skills []string
 	var skillNames []string
+	// skillsContext := make(map[string]string)
+
 	for _, file := range files {
 		if file.IsDir() {
 			skillFilePath := fmt.Sprintf("%s/%s/SKILL.md", SkillsFolderPath, file.Name())
@@ -338,6 +352,8 @@ func getSkillsMetadata() (string, []string, error) {
 				} else if strings.HasPrefix(line, "description: ") {
 					description = strings.TrimSpace(line[13:])
 					inDescription = true
+				} else if strings.HasPrefix(line, "context:") {
+					skillsContext[name] = strings.TrimSpace(line[8:])
 				}
 			}
 			skillNames = append(skillNames, name)
@@ -345,7 +361,7 @@ func getSkillsMetadata() (string, []string, error) {
 		}
 	}
 
-	return strings.Join(skills, "\n"), skillNames, nil
+	return strings.Join(skills, "\n"), skillNames, skillsContext, nil
 }
 
 func buildAssistantMsg(resp *openai.ChatCompletion) openai.ChatCompletionMessageParamUnion {
@@ -448,7 +464,30 @@ func executeSkillTool(args string) (string, error) {
 	argsStr := strings.Fields(skillArgs.(string))
 
 	skillBody := replaceArgumentsInPrompt("/"+skillNameStr, skillNameStr, argsStr)
+
+	if shouldRunSubAgent(skillBody) {
+		resp := runAgentLoop(&client, []openai.ChatCompletionMessageParamUnion{
+			{
+				OfUser: &openai.ChatCompletionUserMessageParam{
+					Content: openai.ChatCompletionUserMessageParamContentUnion{
+						OfString: openai.String(skillBody),
+					},
+				},
+			},
+		}, true)
+
+		return fmt.Sprintf(SubAgentReturnMessage, skillNameStr, resp), nil
+	}
+
 	return skillBody, nil
+}
+
+func shouldRunSubAgent(skillBody string) bool {
+	if skillContext, ok := skillsContext[skillBody]; ok {
+		return skillContext == "fork"
+	}
+
+	return false
 }
 
 func executeBashCommand(args string) (string, error) {
